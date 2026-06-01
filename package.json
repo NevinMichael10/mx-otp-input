@@ -26,7 +26,7 @@
     "@types/big.js": "^6.0.2"
   },
   "dependencies": {
-    "react-native-sms-retriever": "^1.1.1"
+    "react-native-otp-verify": "^1.2.0"
   },
   "resolutions": {
     "react": "^19.0.0",

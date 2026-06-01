@@ -4,16 +4,19 @@ import {
     Platform, Keyboard, ViewStyle, TextStyle
 } from "react-native";
 import { ValueStatus } from "mendix";
-// Dynamically require react-native-sms-retriever only on Android to prevent load-time crashes on iOS, web, or simulators where native modules are missing.
-let SmsRetriever: any = null;
+
+// Dynamically require react-native-otp-verify only on Android
+let RNOtpVerify: any = null;
 if (Platform.OS === "android") {
     try {
-        const smsRetrieverModule = require("react-native-sms-retriever");
-        SmsRetriever = smsRetrieverModule.default || smsRetrieverModule;
+        const otpModule = require("react-native-otp-verify");
+        // Depending on the version, the export might be default or OtpVerify
+        RNOtpVerify = otpModule.default || otpModule.OtpVerify || otpModule;
     } catch (e) {
-        console.warn("OTP Input: Failed to load react-native-sms-retriever module dynamically.", e);
+        console.warn("OTP Input: Failed to load react-native-otp-verify dynamically.", e);
     }
 }
+
 import { OtpInputProps } from "../typings/OtpInputProps";
 
 // ── OTP regex: matches 4–8 digit codes ──────────────────────
@@ -87,7 +90,6 @@ function mergeStyles(styles: any): CustomStyle {
     }
     return merged;
 }
-
 interface State {
     otpValue: string;
     isFocused: boolean;
@@ -119,11 +121,15 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
     componentDidUpdate(prev: OtpInputProps<CustomStyle>) {
         const val = this.props.otpValue?.value;
         const prevVal = prev.otpValue?.value;
-        if (val !== undefined && val !== prevVal) {
-            const cleanVal = val.replace(/\D/g, "").substring(0, this.props.otpLength || 6);
-            if (cleanVal !== this.state.otpValue) {
-                this.setState({ otpValue: cleanVal });
-            }
+        if (val !== undefined && val !== prevVal && val !== this.state.otpValue) {
+            const clean = val.replace(/\D/g, "").substring(0, this.props.otpLength || 6);
+            this.setState({ otpValue: clean }, () => {
+                if (clean.length === (this.props.otpLength || 6)) {
+                    if (this.props.onComplete?.canExecute) {
+                        this.props.onComplete.execute(); // ← was missing
+                    }
+                }
+            });
         }
     }
 
@@ -131,58 +137,47 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
         this.stopListening();
     }
 
-    // ── SMS / OTP listening ──────────────────────────────────
+    // ── OTP listening using react-native-otp-verify ──────────
 
     startListening() {
-        if (Platform.OS === "android") {
+        if (Platform.OS === "android" && RNOtpVerify) {
             this.startAndroidSmsListener();
-            this.logAndroidAppHash();
+            this.logAndroidAppHash(); // Optional: RNOtpVerify can also generate the hash if needed
         }
     }
 
     logAndroidAppHash() {
-        if (!this.props.consoleAppHash) {
-            return;
-        }
+        if (!this.props.consoleAppHash || !RNOtpVerify) return;
 
-        try {
-            if (SmsRetriever && typeof (SmsRetriever as any).getAppHash === "function") {
-                (SmsRetriever as any).getAppHash()
-                    .then((hash: string) => console.error("OTP Input Android App Hash:", hash))
-                    .catch((err: any) => console.error("OTP Input: Error invoking getAppHash()", err));
-            } else {
-                console.error("OTP Input: SmsRetriever library or getAppHash method is not available.");
-            }
-        } catch (e) {
-            console.error("OTP Input: Exception while fetching App Hash", e);
-        }
+        RNOtpVerify.getHash()
+            .then((hash: string[]) => console.error("OTP Input Android App Hash:", hash[0]))
+            .catch((err: any) => console.error("OTP Input: Error getting App Hash", err));
     }
 
     startAndroidSmsListener() {
-        if (!SmsRetriever) {
-            return;
-        }
-
         try {
-            SmsRetriever.startSmsRetriever()
-                .then((registered: boolean) => {
-                    if (registered) {
-                        SmsRetriever.addSmsListener((event: any) => {
-                            if (event && event.message) {
-                                const match = event.message.match(OTP_REGEX);
+            RNOtpVerify.getOtp()
+                .then(() => {
+                    RNOtpVerify.addListener((message: string) => {
+                        try {
+                            if (message && message !== "Timeout Error") {
+                                const match = message.match(OTP_REGEX);
                                 if (match) {
                                     this.distributeOtp(match[1], true);
                                     this.stopListening();
                                 }
                             }
-                        });
-                        this.setState({ listening: true });
-                    }
+                        } catch (error) {
+                            console.warn("OTP Input: Error parsing SMS message", error);
+                        }
+                    });
+                    this.setState({ listening: true });
                 })
-                .catch((e: any) => {
-                    console.warn("OTP Input: Error starting SMS retriever client", e);
+                .catch((error: any) => {
+                    console.warn("OTP Input: Error starting OTP listener", error);
                 });
 
+            // Auto-timeout after 5 minutes to clean up listeners
             this.timeoutId = setTimeout(() => this.stopListening(), 5 * 60 * 1000);
         } catch (e) {
             // Silent fallback
@@ -192,8 +187,8 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
     stopListening() {
         clearTimeout(this.timeoutId);
         try {
-            if (SmsRetriever) {
-                SmsRetriever.removeSmsListener();
+            if (RNOtpVerify) {
+                RNOtpVerify.removeListener();
             }
         } catch (_) { }
         this.setState({ listening: false });
@@ -220,7 +215,8 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
     }
 
     pushToMendix(value: string) {
-        if (this.props.otpValue?.status === ValueStatus.Available) {
+        // Prevent editing read-only values in Mendix
+        if (this.props.otpValue?.status === ValueStatus.Available && !this.props.otpValue.readOnly) {
             this.props.otpValue.setValue(value);
         }
     }
@@ -230,6 +226,11 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
     handleTextChange = (text: string) => {
         const len = this.props.otpLength || 6;
         const cleaned = text.replace(/\D/g, "").substring(0, len);
+
+        // Prevent redundant state updates
+        if (cleaned === this.state.otpValue) {
+            return;
+        }
 
         this.setState({ otpValue: cleaned, autoFilled: false }, () => {
             this.pushToMendix(cleaned);
