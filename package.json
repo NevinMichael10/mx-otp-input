@@ -1,0 +1,45 @@
+{
+  "name": "otpinput",
+  "widgetName": "OtpInput",
+  "version": "1.0.0",
+  "description": "My widget description",
+  "copyright": "© Mendix Technology BV 2026. All rights reserved.",
+  "author": "Nevin",
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "Apache-2.0",
+  "config": {
+    "projectPath": "C:\\\\Mendix_Projects\\\\AWNIC Mobile App-FNOLJourney"
+  },
+  "packagePath": "strebentechnik",
+  "scripts": {
+    "start": "pluggable-widgets-tools start:native",
+    "build": "pluggable-widgets-tools build:native",
+    "lint": "pluggable-widgets-tools lint",
+    "lint:fix": "pluggable-widgets-tools lint:fix",
+    "prerelease": "npm run lint",
+    "release": "pluggable-widgets-tools release:native"
+  },
+  "devDependencies": {
+    "@mendix/pluggable-widgets-tools": "^11.6.0",
+    "@types/big.js": "^6.0.2"
+  },
+  "dependencies": {
+    "react-native-sms-retriever": "^1.1.1"
+  },
+  "resolutions": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react-native": "~0.78.2"
+  },
+  "overrides": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react-native": "~0.78.2"
+  }
+}

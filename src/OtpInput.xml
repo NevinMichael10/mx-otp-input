@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<widget id="strebentechnik.otpinput.OtpInput" pluginWidget="true" needsEntityContext="true" offlineCapable="true"
+        supportedPlatform="Native"
+        xmlns="http://www.mendix.com/widget/1.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.mendix.com/widget/1.0/ ../node_modules/mendix/custom_widget.xsd">
+    <name>AWNIC OTP Input</name>
+    <description>OTP input with SMS and email auto-fill for iOS and Android.</description>
+    <icon/>
+
+    <properties>
+        <propertyGroup caption="Data">
+            <property key="otpValue" type="attribute" required="true">
+                <caption>OTP value</caption>
+                <description>String attribute to store the entered OTP.</description>
+                <attributeTypes>
+                    <attributeType name="String"/>
+                </attributeTypes>
+            </property>
+        </propertyGroup>
+
+        <propertyGroup caption="Behaviour">
+            <property key="otpLength" type="integer" defaultValue="6">
+                <caption>OTP length</caption>
+                <description>Number of digits (4 or 6 typically).</description>
+            </property>
+            <property key="secureTextEntry" type="boolean" defaultValue="false">
+                <caption>Secure text entry</caption>
+                <description>Mask the entered digits.</description>
+            </property>
+            <property key="autoFocus" type="boolean" defaultValue="false">
+                <caption>Auto focus</caption>
+                <description>Focus the input automatically when the widget mounts.</description>
+            </property>
+            <property key="placeholderChar" type="string" required="false">
+                <caption>Placeholder character</caption>
+                <description>Single character shown when a box is empty (e.g. '-' or '·').</description>
+            </property>
+            <property key="onComplete" type="action" required="false">
+                <caption>On complete</caption>
+                <description>Action to run when all digits are entered.</description>
+            </property>
+            <property key="onChange" type="action" required="false">
+                <caption>On change</caption>
+                <description>Action to run when any digit changes.</description>
+            </property>
+            <property key="consoleAppHash" type="boolean" defaultValue="false">
+                <caption>Console App Hash</caption>
+                <description>Log the Android App Hash Signature to the console for testing.</description>
+            </property>
+        </propertyGroup>
+
+        <propertyGroup caption="Appearance">
+            <property key="showBadge" type="boolean" defaultValue="true">
+                <caption>Show auto-fill badge</caption>
+                <description>Show the badge when OTP is auto-filled.</description>
+            </property>
+            <property key="badgeText" type="string" defaultValue="Auto-filled">
+                <caption>Badge text</caption>
+                <description>Custom text for the auto-fill badge.</description>
+            </property>
+            <property key="showHint" type="boolean" defaultValue="true">
+                <caption>Show hint</caption>
+                <description>Show the hint text below the input boxes.</description>
+            </property>
+            <property key="customHint" type="string" required="false">
+                <caption>Custom hint</caption>
+                <description>Custom instruction text. If empty, the default will be used.</description>
+            </property>
+        </propertyGroup>
+    </properties>
+</widget>
