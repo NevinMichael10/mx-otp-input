@@ -23,7 +23,7 @@ export interface CustomStyle {
 }
 
 const defaultStyle: Required<CustomStyle> = {
-    container: { alignItems: "center", paddingVertical: 16 },
+    container: { alignItems: "center", paddingVertical: 4 },
     badge: {
         backgroundColor: "#E6F4EE",
         borderRadius: 12,
@@ -32,7 +32,7 @@ const defaultStyle: Required<CustomStyle> = {
         marginBottom: 12
     },
     badgeText: { color: "#0F6E56", fontSize: 13, fontWeight: "500" },
-    row: { flexDirection: "row", gap: 10, justifyContent: "center", width: "100%", paddingHorizontal: 16 },
+    row: { flexDirection: "row", gap: 10, justifyContent: "center", width: "100%" },
     box: {
         flex: 1,
         minWidth: 32,
@@ -41,17 +41,17 @@ const defaultStyle: Required<CustomStyle> = {
         maxHeight: 66,
         aspectRatio: 46 / 54,
         borderWidth: 1.5,
-        borderColor: "#C8C6BE",
+        borderColor: "#E6E6E6",
         borderRadius: 8,
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "#FAFAF8"
+        backgroundColor: "#FFFFFF"
     },
-    boxFilled: { borderColor: "#1D9E75", backgroundColor: "#F0FAF6" },
-    boxAuto: { borderColor: "#1D9E75", backgroundColor: "#E6F4EE" },
-    boxFocused: { borderColor: "#007AFF", backgroundColor: "#F2F8FF" },
+    boxFilled: { borderColor: "#B3B3B3", backgroundColor: "#fcfcfc" },
+    boxAuto: { borderColor: "#B3B3B3", backgroundColor: "#fcfcfc" },
+    boxFocused: { borderColor: "#41348D", backgroundColor: "#F2F8FF" },
     boxText: { fontSize: 22, fontWeight: "600", color: "#1A1A18", textAlign: "center" },
-    boxTextFocused: { color: "#007AFF" },
+    boxTextFocused: { color: "#41348D" },
     hint: { marginTop: 14, fontSize: 13, color: "#6B6965", textAlign: "center" }
 };
 
@@ -336,7 +336,7 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
                     keyboardType="number-pad"
                     maxLength={len}
                     textContentType="oneTimeCode"
-                    autoComplete={Platform.OS === "android" ? "one-time-code" : "off"}
+                    autoComplete="one-time-code"
                     autoFocus={this.props.autoFocus}
                     style={{
                         position: "absolute",
