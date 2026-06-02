@@ -4,7 +4,7 @@
  * @author Mendix Widgets Framework Team
  */
 import { CSSProperties } from "react";
-import { ActionValue, EditableValue } from "mendix";
+import { ActionValue, DynamicValue, EditableValue } from "mendix";
 
 export interface OtpInputProps<Style> {
     name: string;
@@ -16,7 +16,8 @@ export interface OtpInputProps<Style> {
     placeholderChar: string;
     onComplete?: ActionValue;
     onChange?: ActionValue;
-    consoleAppHash: boolean;
+    consoleAppHash?: DynamicValue<boolean>;
+    smsTimeout: number;
     showBadge: boolean;
     badgeText: string;
     showHint: boolean;
@@ -41,7 +42,8 @@ export interface OtpInputPreviewProps {
     placeholderChar: string;
     onComplete: {} | null;
     onChange: {} | null;
-    consoleAppHash: boolean;
+    consoleAppHash: string;
+    smsTimeout: number | null;
     showBadge: boolean;
     badgeText: string;
     showHint: boolean;

@@ -1,21 +1,7 @@
 import { Component } from "react";
-import {
-    View, TextInput, Text, Pressable,
-    Platform, Keyboard, ViewStyle, TextStyle
-} from "react-native";
+import { View, TextInput, Text, Pressable, Platform, Keyboard, ViewStyle, TextStyle } from "react-native";
 import { ValueStatus } from "mendix";
-
-// Dynamically require react-native-otp-verify only on Android
-let RNOtpVerify: any = null;
-if (Platform.OS === "android") {
-    try {
-        const otpModule = require("react-native-otp-verify");
-        // Depending on the version, the export might be default or OtpVerify
-        RNOtpVerify = otpModule.default || otpModule.OtpVerify || otpModule;
-    } catch (e) {
-        console.warn("OTP Input: Failed to load react-native-otp-verify dynamically.", e);
-    }
-}
+import OtpVerify, { getHash } from "react-native-otp-verify";
 
 import { OtpInputProps } from "../typings/OtpInputProps";
 
@@ -46,10 +32,14 @@ const defaultStyle: Required<CustomStyle> = {
         marginBottom: 12
     },
     badgeText: { color: "#0F6E56", fontSize: 13, fontWeight: "500" },
-    row: { flexDirection: "row", gap: 10, justifyContent: "center" },
+    row: { flexDirection: "row", gap: 10, justifyContent: "center", width: "100%", paddingHorizontal: 16 },
     box: {
-        width: 46,
-        height: 54,
+        flex: 1,
+        minWidth: 32,
+        maxWidth: 56,
+        minHeight: 38,
+        maxHeight: 66,
+        aspectRatio: 46 / 54,
         borderWidth: 1.5,
         borderColor: "#C8C6BE",
         borderRadius: 8,
@@ -95,6 +85,7 @@ interface State {
     isFocused: boolean;
     autoFilled: boolean;
     listening: boolean;
+    appHash?: string;
 }
 
 export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
@@ -126,10 +117,16 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
             this.setState({ otpValue: clean }, () => {
                 if (clean.length === (this.props.otpLength || 6)) {
                     if (this.props.onComplete?.canExecute) {
-                        this.props.onComplete.execute(); // ← was missing
+                        this.props.onComplete.execute();
                     }
                 }
             });
+        }
+
+        const consoleAppHashVal = this.props.consoleAppHash && this.props.consoleAppHash.value;
+        const prevConsoleAppHashVal = prev.consoleAppHash && prev.consoleAppHash.value;
+        if (consoleAppHashVal === true && prevConsoleAppHashVal !== true && this.state.appHash) {
+            console.info("OTP Input Android App Hash:", this.state.appHash);
         }
     }
 
@@ -140,25 +137,29 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
     // ── OTP listening using react-native-otp-verify ──────────
 
     startListening() {
-        if (Platform.OS === "android" && RNOtpVerify) {
+        if (Platform.OS === "android") {
             this.startAndroidSmsListener();
-            this.logAndroidAppHash(); // Optional: RNOtpVerify can also generate the hash if needed
+            this.logAndroidAppHash();
         }
     }
 
     logAndroidAppHash() {
-        if (!this.props.consoleAppHash || !RNOtpVerify) return;
-
-        RNOtpVerify.getHash()
-            .then((hash: string[]) => console.error("OTP Input Android App Hash:", hash[0]))
-            .catch((err: any) => console.error("OTP Input: Error getting App Hash", err));
+        getHash()
+            .then((hash: string[]) => {
+                const appHash = hash[0];
+                this.setState({ appHash });
+                if (this.props.consoleAppHash && this.props.consoleAppHash.value === true) {
+                    console.info("OTP Input Android App Hash:", appHash);
+                }
+            })
+            .catch((err: any) => console.warn("OTP Input: Error getting App Hash", err));
     }
 
     startAndroidSmsListener() {
         try {
-            RNOtpVerify.getOtp()
+            OtpVerify.getOtp()
                 .then(() => {
-                    RNOtpVerify.addListener((message: string) => {
+                    OtpVerify.addListener((message: string) => {
                         try {
                             if (message && message !== "Timeout Error") {
                                 const match = message.match(OTP_REGEX);
@@ -171,14 +172,15 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
                             console.warn("OTP Input: Error parsing SMS message", error);
                         }
                     });
+
                     this.setState({ listening: true });
                 })
                 .catch((error: any) => {
                     console.warn("OTP Input: Error starting OTP listener", error);
                 });
 
-            // Auto-timeout after 5 minutes to clean up listeners
-            this.timeoutId = setTimeout(() => this.stopListening(), 5 * 60 * 1000);
+            const timeoutSeconds = this.props.smsTimeout && this.props.smsTimeout > 0 ? this.props.smsTimeout : 300;
+            this.timeoutId = setTimeout(() => this.stopListening(), timeoutSeconds * 1000);
         } catch (e) {
             // Silent fallback
         }
@@ -186,11 +188,11 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
 
     stopListening() {
         clearTimeout(this.timeoutId);
+
         try {
-            if (RNOtpVerify) {
-                RNOtpVerify.removeListener();
-            }
+            OtpVerify.removeListener();
         } catch (_) { }
+
         this.setState({ listening: false });
     }
 
@@ -349,6 +351,13 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
                 {this.props.showHint && (
                     <Text style={mergedStyle.hint}>
                         {resolvedHint}
+                    </Text>
+                )}
+
+                {/* App Hash Helper Text */}
+                {this.props.consoleAppHash && this.props.consoleAppHash.value === true && this.state.appHash && (
+                    <Text style={[mergedStyle.hint, { marginTop: 6, fontWeight: "500" }]}>
+                        {`App Hash: ${this.state.appHash}`}
                     </Text>
                 )}
             </View>

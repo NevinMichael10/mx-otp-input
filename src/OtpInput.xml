@@ -3,7 +3,7 @@
         supportedPlatform="Native"
         xmlns="http://www.mendix.com/widget/1.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="http://www.mendix.com/widget/1.0/ ../node_modules/mendix/custom_widget.xsd">
-    <name>AWNIC OTP Input</name>
+    <name>OTP Input</name>
     <description>OTP input with SMS and email auto-fill for iOS and Android.</description>
     <icon/>
 
@@ -43,9 +43,14 @@
                 <caption>On change</caption>
                 <description>Action to run when any digit changes.</description>
             </property>
-            <property key="consoleAppHash" type="boolean" defaultValue="false">
+            <property key="consoleAppHash" type="expression" required="false">
                 <caption>Console App Hash</caption>
-                <description>Log the Android App Hash Signature to the console for testing.</description>
+                <description>Show and log the Android App Hash Signature for testing.</description>
+                <returnType type="Boolean"/>
+            </property>
+            <property key="smsTimeout" type="integer" required="true" defaultValue="300">
+                <caption>SMS Autofill Timeout (seconds)</caption>
+                <description>The duration in seconds to listen for the SMS before timing out. Defaults to 300 seconds (5 minutes) if left empty.</description>
             </property>
         </propertyGroup>
 
