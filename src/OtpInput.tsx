@@ -1,9 +1,14 @@
 import { Component } from "react";
 import { View, TextInput, Text, Pressable, Platform, Keyboard, ViewStyle, TextStyle } from "react-native";
 import { ValueStatus } from "mendix";
-import OtpVerify, { getHash } from "react-native-otp-verify";
 
 import { OtpInputProps } from "../typings/OtpInputProps";
+
+declare var require: any;
+
+const OtpVerifyModule = Platform.OS === "android" ? require("react-native-otp-verify") : null;
+const OtpVerify = OtpVerifyModule ? (OtpVerifyModule.default || OtpVerifyModule) : null;
+const getHash = OtpVerifyModule ? OtpVerifyModule.getHash : null;
 
 // ── OTP regex: matches 4–8 digit codes ──────────────────────
 const OTP_REGEX = /\b(\d{4,8})\b/;
@@ -144,6 +149,9 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
     }
 
     logAndroidAppHash() {
+        if (!getHash) {
+            return;
+        }
         getHash()
             .then((hash: string[]) => {
                 const appHash = hash[0];
@@ -156,6 +164,9 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
     }
 
     startAndroidSmsListener() {
+        if (!OtpVerify) {
+            return;
+        }
         try {
             OtpVerify.getOtp()
                 .then(() => {
@@ -190,7 +201,9 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
         clearTimeout(this.timeoutId);
 
         try {
-            OtpVerify.removeListener();
+            if (OtpVerify) {
+                OtpVerify.removeListener();
+            }
         } catch (_) { }
 
         this.setState({ listening: false });
