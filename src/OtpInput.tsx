@@ -1,18 +1,28 @@
-import { Component } from "react";
+import { Component, ReactNode } from "react";
 import { View, TextInput, Text, Pressable, Platform, Keyboard, ViewStyle, TextStyle } from "react-native";
 import { ValueStatus } from "mendix";
 
 import { OtpInputProps } from "../typings/OtpInputProps";
 
-declare var require: any;
+declare let require: any;
 
-const OtpVerifyModule = Platform.OS === "android" ? require("react-native-otp-verify") : null;
-const OtpVerify = OtpVerifyModule ? (OtpVerifyModule.default || OtpVerifyModule) : null;
+let OtpVerifyModule: any = null;
+try {
+    OtpVerifyModule = Platform.OS === "android" ? require("react-native-otp-verify") : null;
+} catch (error) {
+    console.debug("OTP Input: react-native-otp-verify is not available", error);
+}
+const OtpVerify = OtpVerifyModule ? OtpVerifyModule.default || OtpVerifyModule : null;
 const getHash = OtpVerifyModule ? OtpVerifyModule.getHash : null;
 
-// ── OTP regex: matches 4–8 digit codes ──────────────────────
-const OTP_REGEX = /\b(\d{4,8})\b/;
+// ── OTP regex: keyword-anchored, matches 4–8 digit codes ─────
+// Looks for OTP/code/pin/verify keywords before the digits to avoid
+// matching order numbers, phone numbers, or other numeric strings.
+const OTP_REGEX = /(?:otp|code|pin|verify|verification|passcode)[^\d]{0,10}(\d{4,8})/i;
 
+const OTP_FALLBACK_REGEX = /\b(\d{4,8})\b/;
+
+// ── Style types ──────────────────────────────────────────────
 export interface CustomStyle {
     container?: ViewStyle;
     badge?: ViewStyle;
@@ -60,31 +70,38 @@ const defaultStyle: Required<CustomStyle> = {
     hint: { marginTop: 14, fontSize: 13, color: "#6B6965", textAlign: "center" }
 };
 
+// FIX: Wrapped in try/catch — resilient against malformed style shapes from Mendix
 function mergeStyles(styles: any): CustomStyle {
-    if (!styles || !Array.isArray(styles) || styles.length === 0) {
-        return defaultStyle;
-    }
-    const merged: CustomStyle = {};
-    const keys = Object.keys(defaultStyle) as Array<keyof CustomStyle>;
+    try {
+        if (!styles || !Array.isArray(styles) || styles.length === 0) {
+            return defaultStyle;
+        }
+        const merged: CustomStyle = {};
+        const keys = Object.keys(defaultStyle) as Array<keyof CustomStyle>;
 
-    for (const key of keys) {
-        merged[key] = { ...defaultStyle[key] } as any;
-    }
+        for (const key of keys) {
+            merged[key] = { ...defaultStyle[key] } as any;
+        }
 
-    for (const styleObj of styles) {
-        if (styleObj) {
-            for (const key of keys) {
-                if (styleObj[key]) {
-                    merged[key] = {
-                        ...merged[key],
-                        ...styleObj[key]
-                    } as any;
+        for (const styleObj of styles) {
+            if (styleObj && typeof styleObj === "object") {
+                for (const key of keys) {
+                    if (styleObj[key] && typeof styleObj[key] === "object") {
+                        merged[key] = {
+                            ...merged[key],
+                            ...styleObj[key]
+                        } as any;
+                    }
                 }
             }
         }
+        return merged;
+    } catch (error) {
+        console.debug("mergeStyles failed, using defaultStyle", error);
+        return defaultStyle;
     }
-    return merged;
 }
+
 interface State {
     otpValue: string;
     isFocused: boolean;
@@ -95,7 +112,9 @@ interface State {
 
 export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
     private inputRef: TextInput | null = null;
-    private timeoutId: any = null;
+    private timeoutId: ReturnType<typeof setTimeout> | null = null;
+    // FIX: Mounted flag to guard setState in async callbacks
+    private _mounted: boolean = false;
 
     constructor(props: OtpInputProps<CustomStyle>) {
         super(props);
@@ -110,22 +129,31 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
 
     // ── Lifecycle ────────────────────────────────────────────
 
-    componentDidMount() {
+    componentDidMount(): void {
+        this._mounted = true;
         this.startListening();
     }
 
-    componentDidUpdate(prev: OtpInputProps<CustomStyle>) {
+    componentDidUpdate(prev: OtpInputProps<CustomStyle>): void {
         const val = this.props.otpValue?.value;
         const prevVal = prev.otpValue?.value;
+
         if (val !== undefined && val !== prevVal && val !== this.state.otpValue) {
-            const clean = val.replace(/\D/g, "").substring(0, this.props.otpLength || 6);
-            this.setState({ otpValue: clean }, () => {
-                if (clean.length === (this.props.otpLength || 6)) {
-                    if (this.props.onComplete?.canExecute) {
-                        this.props.onComplete.execute();
+            const clean = (val || "").replace(/\D/g, "").substring(0, this.props.otpLength || 6);
+
+            // Guard against double-fire — only update if value truly differs from current state
+            if (clean !== this.state.otpValue) {
+                // Mark autoFilled=true if the value arriving externally is a complete OTP.
+                // If it is cleared or shortened, reset autoFilled to false.
+                const isAuto = clean.length === (this.props.otpLength || 6);
+                this.setState({ otpValue: clean, autoFilled: isAuto }, () => {
+                    if (clean.length === (this.props.otpLength || 6)) {
+                        if (this.props.onComplete?.canExecute) {
+                            this.props.onComplete.execute();
+                        }
                     }
-                }
-            });
+                });
+            }
         }
 
         const consoleAppHashVal = this.props.consoleAppHash && this.props.consoleAppHash.value;
@@ -135,25 +163,35 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
         }
     }
 
-    componentWillUnmount() {
+    componentWillUnmount(): void {
+        // FIX: Set flag before any async work so in-flight callbacks bail out
+        this._mounted = false;
         this.stopListening();
     }
 
     // ── OTP listening using react-native-otp-verify ──────────
 
-    startListening() {
+    startListening(): void {
         if (Platform.OS === "android") {
             this.startAndroidSmsListener();
             this.logAndroidAppHash();
         }
+        // NOTE: On iOS, OTP auto-fill is handled natively by the OS via
+        // textContentType="oneTimeCode" on the hidden TextInput. No native module needed.
+        // When the backend sends an OTP via deep link and the nanoflow sets otpValue,
+        // componentDidUpdate picks it up and sets autoFilled=true automatically.
     }
 
-    logAndroidAppHash() {
+    logAndroidAppHash(): void {
         if (!getHash) {
             return;
         }
         getHash()
             .then((hash: string[]) => {
+                // FIX: Guard setState — component may have unmounted before promise resolves
+                if (!this._mounted) {
+                    return;
+                }
                 const appHash = hash[0];
                 this.setState({ appHash });
                 if (this.props.consoleAppHash && this.props.consoleAppHash.value === true) {
@@ -163,18 +201,39 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
             .catch((err: any) => console.warn("OTP Input: Error getting App Hash", err));
     }
 
-    startAndroidSmsListener() {
+    startAndroidSmsListener(): void {
         if (!OtpVerify) {
             return;
         }
+
+        // FIX: Remove any existing listener before (re-)starting to prevent stale
+        // closures and double-fire on component re-mount (e.g. after navigation)
+        try {
+            OtpVerify.removeListener();
+        } catch (error) {
+            console.debug("OtpVerify.removeListener failed", error);
+        }
+
         try {
             OtpVerify.getOtp()
                 .then(() => {
+                    // FIX: Guard — component may have unmounted before promise resolves
+                    if (!this._mounted) {
+                        return;
+                    }
+
                     OtpVerify.addListener((message: string) => {
+                        // FIX: Inner guard too — listener fires asynchronously
+                        if (!this._mounted) {
+                            return;
+                        }
+
                         try {
                             if (message && message !== "Timeout Error") {
-                                const match = message.match(OTP_REGEX);
+                                // FIX: Try keyword-anchored regex first, fall back to positional
+                                const match = message.match(OTP_REGEX) || message.match(OTP_FALLBACK_REGEX);
                                 if (match) {
+                                    // OTP_REGEX captures group 1; OTP_FALLBACK_REGEX also group 1
                                     this.distributeOtp(match[1], true);
                                     this.stopListening();
                                 }
@@ -184,44 +243,62 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
                         }
                     });
 
-                    this.setState({ listening: true });
+                    if (this._mounted) {
+                        this.setState({ listening: true });
+                    }
                 })
                 .catch((error: any) => {
                     console.warn("OTP Input: Error starting OTP listener", error);
                 });
 
+            // NOTE: smsTimeout controls JS-side cleanup only.
+            // The Android SMS Retriever session is always 5 minutes at the OS level
+            // regardless of this value — shorter values here only stop JS processing early.
             const timeoutSeconds = this.props.smsTimeout && this.props.smsTimeout > 0 ? this.props.smsTimeout : 300;
             this.timeoutId = setTimeout(() => this.stopListening(), timeoutSeconds * 1000);
-        } catch (e) {
-            // Silent fallback
+        } catch (error) {
+            console.debug("SMS Retriever is not available", error);
         }
     }
 
-    stopListening() {
-        clearTimeout(this.timeoutId);
+    stopListening(): void {
+        if (this.timeoutId) {
+            clearTimeout(this.timeoutId);
+            this.timeoutId = null;
+        }
 
         try {
             if (OtpVerify) {
                 OtpVerify.removeListener();
             }
-        } catch (_) { }
+        } catch (error) {
+            console.debug("OtpVerify.removeListener failed", error);
+        }
 
-        this.setState({ listening: false });
+        // FIX: Guard setState — stopListening may be called after unmount
+        if (this._mounted) {
+            this.setState({ listening: false });
+        }
     }
 
     // ── OTP fill logic ───────────────────────────────────────
 
-    distributeOtp(otp: string, isAuto: boolean) {
+    distributeOtp(otp: string, isAuto: boolean): void {
         const len = this.props.otpLength || 6;
         const finalOtp = otp.replace(/\D/g, "").substring(0, len);
 
         this.setState({ otpValue: finalOtp, autoFilled: isAuto }, () => {
             this.pushToMendix(finalOtp);
+
             if (this.props.onChange?.canExecute) {
                 this.props.onChange.execute();
             }
+
             if (finalOtp.length === len) {
                 Keyboard.dismiss();
+                if (this.inputRef) {
+                    this.inputRef.blur();
+                }
                 if (this.props.onComplete?.canExecute) {
                     this.props.onComplete.execute();
                 }
@@ -229,7 +306,7 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
         });
     }
 
-    pushToMendix(value: string) {
+    pushToMendix(value: string): void {
         // Prevent editing read-only values in Mendix
         if (this.props.otpValue?.status === ValueStatus.Available && !this.props.otpValue.readOnly) {
             this.props.otpValue.setValue(value);
@@ -238,7 +315,7 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
 
     // ── Input Event Handlers ─────────────────────────────────
 
-    handleTextChange = (text: string) => {
+    handleTextChange = (text: string): void => {
         const len = this.props.otpLength || 6;
         const cleaned = text.replace(/\D/g, "").substring(0, len);
 
@@ -249,11 +326,16 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
 
         this.setState({ otpValue: cleaned, autoFilled: false }, () => {
             this.pushToMendix(cleaned);
+
             if (this.props.onChange?.canExecute) {
                 this.props.onChange.execute();
             }
+
             if (cleaned.length === len) {
                 Keyboard.dismiss();
+                if (this.inputRef) {
+                    this.inputRef.blur();
+                }
                 if (this.props.onComplete?.canExecute) {
                     this.props.onComplete.execute();
                 }
@@ -261,23 +343,23 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
         });
     };
 
-    handlePress = () => {
+    handlePress = (): void => {
         if (this.inputRef) {
             this.inputRef.focus();
         }
     };
 
-    handleFocus = () => {
+    handleFocus = (): void => {
         this.setState({ isFocused: true });
     };
 
-    handleBlur = () => {
+    handleBlur = (): void => {
         this.setState({ isFocused: false });
     };
 
     // ── Render ───────────────────────────────────────────────
 
-    render() {
+    render(): ReactNode {
         const { otpValue, autoFilled, isFocused } = this.state;
         const len = this.props.otpLength || 6;
         const mergedStyle = mergeStyles(this.props.style);
@@ -286,14 +368,16 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
         const boxes = [];
         for (let i = 0; i < len; i++) {
             const char = otpValue[i] || "";
-            const isCurrentBoxFocused = isFocused && (
-                otpValue.length === i ||
-                (otpValue.length === len && i === len - 1)
-            );
+            const isCurrentBoxFocused =
+                isFocused && (otpValue.length === i || (otpValue.length === len && i === len - 1));
 
             const displayChar = char
-                ? (this.props.secureTextEntry ? "•" : char)
-                : (this.props.placeholderChar ? this.props.placeholderChar.substring(0, 1) : "");
+                ? this.props.secureTextEntry
+                    ? "•"
+                    : char
+                : this.props.placeholderChar
+                    ? this.props.placeholderChar.substring(0, 1)
+                    : "";
 
             boxes.push(
                 <View
@@ -305,12 +389,7 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
                         isCurrentBoxFocused ? mergedStyle.boxFocused : null
                     ]}
                 >
-                    <Text
-                        style={[
-                            mergedStyle.boxText,
-                            isCurrentBoxFocused ? mergedStyle.boxTextFocused : null
-                        ]}
-                    >
+                    <Text style={[mergedStyle.boxText, isCurrentBoxFocused ? mergedStyle.boxTextFocused : null]}>
                         {displayChar}
                     </Text>
                 </View>
@@ -319,18 +398,16 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
 
         const resolvedHint = this.props.customHint
             ? this.props.customHint
-            : (autoFilled
+            : autoFilled
                 ? "OTP filled automatically."
-                : "Enter the OTP sent to your registered contact");
+                : "Enter the OTP sent to your registered contact";
 
         return (
             <View style={mergedStyle.container}>
                 {/* Auto-filled Badge */}
                 {this.props.showBadge && autoFilled && (
                     <View style={mergedStyle.badge}>
-                        <Text style={mergedStyle.badgeText}>
-                            {this.props.badgeText || "Auto-filled"}
-                        </Text>
+                        <Text style={mergedStyle.badgeText}>{this.props.badgeText || "Auto-filled"}</Text>
                     </View>
                 )}
 
@@ -341,7 +418,9 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
 
                 {/* Hidden source-of-truth TextInput */}
                 <TextInput
-                    ref={ref => { this.inputRef = ref; }}
+                    ref={ref => {
+                        this.inputRef = ref;
+                    }}
                     value={otpValue}
                     onChangeText={this.handleTextChange}
                     onFocus={this.handleFocus}
@@ -361,11 +440,7 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
                 />
 
                 {/* Hint Text */}
-                {this.props.showHint && (
-                    <Text style={mergedStyle.hint}>
-                        {resolvedHint}
-                    </Text>
-                )}
+                {this.props.showHint && <Text style={mergedStyle.hint}>{resolvedHint}</Text>}
 
                 {/* App Hash Helper Text */}
                 {this.props.consoleAppHash && this.props.consoleAppHash.value === true && this.state.appHash && (
