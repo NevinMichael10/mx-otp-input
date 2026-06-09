@@ -7,7 +7,6 @@ A production-ready OTP (One-Time Password) input widget for **Mendix Native Mobi
 ## Table of Contents
 
 - [Features](#features)
-- [Demo](#demo)
 - [Installation](#installation)
 - [Setting the Project Path](#setting-the-project-path)
 - [Widget Properties](#widget-properties)
@@ -49,15 +48,6 @@ A production-ready OTP (One-Time Password) input widget for **Mendix Native Mobi
 
 ---
 
-## Demo
-
-| Default | Focused | Auto-filled |
-| :---: | :---: | :---: |
-| `[ _ ][ _ ][ _ ][ _ ][ _ ][ _ ]` | `[ _ ][ _ ][ 3 ][ _ ][ _ ][ _ ]` | `[ 1 ][ 2 ][ 3 ][ 4 ][ 5 ][ 6 ]` |
-| Grey borders | Purple focus ring | Grey borders + badge |
-
----
-
 ## Installation
 
 1. Download or build the widget `.mpk` file (see [Development & Contribution](#development--contribution)).
@@ -74,7 +64,6 @@ During development, the widget build tooling needs to know where your **Mendix p
 This is configured via the `config.projectPath` field in [`package.json`](./package.json):
 
 ```jsonc
-// package.json  (line 12-14)
 {
   "config": {
     "projectPath": "C:\\\\Mendix_Projects\\\\Your-Mendix-App"
@@ -85,7 +74,7 @@ This is configured via the `config.projectPath` field in [`package.json`](./pack
 ### How to set it
 
 1. Open [`package.json`](./package.json) in the project root.
-2. Locate the `"config"` → `"projectPath"` entry (line 13).
+2. Locate the `"config"` → `"projectPath"` entry.
 3. Replace the value with the **absolute path** to your local Mendix project directory.
    - This is the folder that contains the `.mpr` file.
    - Use **double-escaped backslashes** (`\\\\`) on Windows.
@@ -149,19 +138,21 @@ The widget exposes the following style keys. Each key maps to a specific part of
 │              container                  │    ← Outermost wrapper
 │                                         │
 │          ┌─────────────┐                │
-│          │    badge     │                │    ← Auto-fill pill badge
-│          │  badgeText   │                │
+│          │    badge    │                │    ← Auto-fill pill badge
+│          │  badgeText  │                │
 │          └─────────────┘                │
 │                                         │
 │  ┌───────────────────────────────────┐  │
 │  │              row                  │  │    ← Horizontal row of boxes
-│  │  ┌─────┐ ┌─────┐ ┌─────┐  ...   │  │
-│  │  │ box │ │ box │ │ box │         │  │    ← Individual digit box
-│  │  │Text │ │Text │ │Text │         │  │    ← boxText inside each box
-│  │  └─────┘ └─────┘ └─────┘         │  │
+│  │  ┌─────┐ ┌─────┐ ┌─────┐          │  │
+│  │  │ box │ │ box │ │ box │          │  │    ← Individual digit box
+│  │  │Text │ │Text │ │Text │          │  │    ← boxText inside each box
+│  │  └─────┘ └─────┘ └─────┘          │  │
 │  └───────────────────────────────────┘  │
 │                                         │
-│             hint                        │    ← Hint text below
+│                hint                     │    ← Hint text
+│                                         │
+│                hint                     │    ← appHash text
 └─────────────────────────────────────────┘
 ```
 
