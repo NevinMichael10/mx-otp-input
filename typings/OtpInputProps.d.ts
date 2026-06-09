@@ -18,6 +18,7 @@ export interface OtpInputProps<Style> {
     onChange?: ActionValue;
     consoleAppHash?: DynamicValue<boolean>;
     smsTimeout: number;
+    resendTrigger?: EditableValue<boolean>;
     showBadge: boolean;
     badgeText: string;
     showHint: boolean;
@@ -44,6 +45,7 @@ export interface OtpInputPreviewProps {
     onChange: {} | null;
     consoleAppHash: string;
     smsTimeout: number | null;
+    resendTrigger: string;
     showBadge: boolean;
     badgeText: string;
     showHint: boolean;

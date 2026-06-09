@@ -161,6 +161,25 @@ export class OtpInput extends Component<OtpInputProps<CustomStyle>, State> {
         if (consoleAppHashVal === true && prevConsoleAppHashVal !== true && this.state.appHash) {
             console.info("OTP Input Android App Hash:", this.state.appHash);
         }
+
+        // ── Resend trigger: restart SMS listener when toggled to true ──
+        const resendVal = this.props.resendTrigger?.value;
+        const prevResendVal = prev.resendTrigger?.value;
+        if (resendVal === true && prevResendVal !== true) {
+            // Clear OTP state
+            this.setState({ otpValue: "", autoFilled: false }, () => {
+                this.pushToMendix("");
+            });
+
+            // Restart SMS listener
+            this.stopListening();
+            this.startListening();
+
+            // Reset the trigger back to false so it can be fired again
+            if (this.props.resendTrigger && !this.props.resendTrigger.readOnly) {
+                this.props.resendTrigger.setValue(false);
+            }
+        }
     }
 
     componentWillUnmount(): void {

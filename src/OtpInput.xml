@@ -52,6 +52,13 @@
                 <caption>SMS Autofill Timeout (seconds)</caption>
                 <description>The duration in seconds to listen for the SMS before timing out. Defaults to 300 seconds (5 minutes) if left empty.</description>
             </property>
+            <property key="resendTrigger" type="attribute" required="false">
+                <caption>Resend trigger</caption>
+                <description>Boolean attribute. Set to true from a nanoflow (e.g. on a Resend OTP button) to clear the OTP and restart the SMS listener. The widget resets it to false automatically.</description>
+                <attributeTypes>
+                    <attributeType name="Boolean"/>
+                </attributeTypes>
+            </property>
         </propertyGroup>
 
         <propertyGroup caption="Appearance">
